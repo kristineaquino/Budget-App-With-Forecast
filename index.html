@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHP Budget Tracker - Ate Tine</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 font-sans pb-24">
+
+    <!-- Top Header -->
+    <header class="bg-indigo-600 text-white p-4 shadow-md sticky top-0 z-50 flex justify-between items-center">
+        <h1 class="text-lg font-bold">PHP Budget Tracker</h1>
+        <button onclick="exportToCSV()" class="bg-indigo-700 px-3 py-1 rounded text-sm hover:bg-indigo-800">
+            <i class="fas fa-file-excel mr-1"></i> Export
+        </button>
+    </header>
+
+    <!-- Main Container -->
+    <main class="p-4 max-w-md mx-auto">
+
+        <!-- 1. BUDGET PAGE -->
+        <div id="tab-budget" class="tab-content space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800">Budget Overview</h2>
+                <button onclick="openModal('transactionModal')" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold shadow">Add Entry</button>
+            </div>
+            <!-- Visualizations -->
+            <div class="bg-white p-4 rounded-xl shadow space-y-4">
+                <h3 class="font-bold text-gray-700 text-sm">Visualizations</h3>
+                <canvas id="budgetIEChart"></canvas>
+                <canvas id="budgetLoanChart"></canvas>
+                <canvas id="budgetSavingsChart"></canvas>
+            </div>
+            <!-- Data List -->
+            <div class="bg-white p-4 rounded-xl shadow">
+                <h3 class="font-bold text-gray-700 mb-2">Transactions & Inflows</h3>
+                <div id="transactionList" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- 2. SAVINGS PAGE -->
+        <div id="tab-savings" class="tab-content hidden space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800">Savings Accounts</h2>
+                <button onclick="openModal('savingsModal')" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold shadow">Add Savings</button>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow">
+                <canvas id="savingsPageChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow">
+                <h3 class="font-bold text-gray-700 mb-2">My Bank Savings & Withdrawals</h3>
+                <div id="savingsList" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- 3. LOANS PAGE -->
+        <div id="tab-loans" class="tab-content hidden space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800">Loans Tracker</h2>
+                <button onclick="openModal('loanModal')" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold shadow">Add Loan</button>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow">
+                <canvas id="loansPageChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow">
+                <h3 class="font-bold text-gray-700 mb-2">Active Loans</h3>
+                <div id="loanList" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- 4. FORECAST PAGE -->
+        <div id="tab-forecast" class="tab-content hidden space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800">Expense Forecast</h2>
+                <button onclick="openModal('forecastModal')" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold shadow">Add Forecast</button>
+            </div>
+            <!-- Drilldown Filter -->
+            <div class="bg-white p-3 rounded-xl shadow flex space-x-2">
+                <select id="filterMonth" onchange="renderAll()" class="w-1/2 border p-2 rounded text-sm">
+                    <option value="ALL">All Months</option>
+                    <option value="01">January</option><option value="02">February</option><option value="03">March</option>
+                    <option value="04">April</option><option value="05">May</option><option value="06">June</option>
+                    <option value="07">July</option><option value="08">August</option><option value="09">September</option>
+                    <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+                </select>
+                <select id="filterYear" onchange="renderAll()" class="w-1/2 border p-2 rounded text-sm">
+                    <option value="2026">2026</option><option value="2027">2027</option>
+                </select>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow">
+                <div id="forecastList" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- 5. FINANCIAL SUMMARY PAGE -->
+        <div id="tab-summary" class="tab-content hidden space-y-4">
+            <h2 class="text-xl font-bold text-gray-800">Financial Summary</h2>
+            <div class="bg-white p-4 rounded-xl shadow space-y-2">
+                <div class="flex justify-between text-green-600 font-bold"><span>Total Income:</span><span id="sumIncome">₱0.00</span></div>
+                <div class="flex justify-between text-red-600 font-bold"><span>Total Expenses:</span><span id="sumExpense">₱0.00</span></div>
+                <hr>
+                <div class="flex justify-between text-gray-800 font-bold"><span>Net Balance:</span><span id="sumNet">₱0.00</span></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow"><canvas id="summaryIEChart"></canvas></div>
+            <div class="bg-white p-4 rounded-xl shadow"><canvas id="summaryLoanChart"></canvas></div>
+            <div class="bg-white p-4 rounded-xl shadow"><canvas id="summarySavingsChart"></canvas></div>
+        </div>
+
+        <!-- 6. SETTINGS PAGE -->
+        <div id="tab-settings" class="tab-content hidden space-y-4">
+            <h2 class="text-xl font-bold text-gray-800">Settings</h2>
+            <div class="bg-white p-4 rounded-xl shadow space-y-3">
+                <h3 class="font-bold text-gray-700 text-sm">Add Custom Category</h3>
+                <div class="flex space-x-2">
+                    <input type="text" id="newCategoryInput" placeholder="Category Name" class="border p-2 rounded flex-1">
+                    <button onclick="addCategory()" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm">Add</button>
+                </div>
+                <div id="categoryList" class="flex flex-wrap gap-2 pt-2"></div>
+            </div>
+        </div>
+
+        <!-- 7. ABOUT PAGE -->
+        <div id="tab-about" class="tab-content hidden text-center py-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">About Developer</h2>
+            <p class="text-gray-600 text-sm mb-4 px-4">
+                I’m always open to discussing new projects, creative ideas, or opportunities to collaborate.
+            </p>
+            <p class="text-indigo-600 font-semibold text-sm mb-6">
+                <a href="mailto:kristine.aquino2019@gmail.com">kristine.aquino2019@gmail.com</a>
+            </p>
+            <div class="space-y-3">
+                <a href="https://www.linkedin.com/in/kristineaquino/" target="_blank" class="block bg-blue-600 text-white py-2 px-4 rounded-lg font-medium shadow">Connect on LinkedIn</a>
+                <a href="https://sites.google.com/view/kristinedaquino/home" target="_blank" class="block border border-indigo-600 text-indigo-600 py-2 px-4 rounded-lg font-medium shadow-sm">View Portfolio</a>
+            </div>
+            <p class="mt-8 font-bold text-gray-700">~ Ate Tine</p>
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2 shadow-lg z-40">
+        <button onclick="switchTab(0)" class="nav-btn text-indigo-600 flex flex-col items-center"><i class="fas fa-home text-base"></i><span class="text-[10px]">Budget</span></button>
+        <button onclick="switchTab(1)" class="nav-btn text-gray-400 flex flex-col items-center"><i class="fas fa-piggy-bank text-base"></i><span class="text-[10px]">Savings</span></button>
+        <button onclick="switchTab(2)" class="nav-btn text-gray-400 flex flex-col items-center"><i class="fas fa-hand-holding-usd text-base"></i><span class="text-[10px]">Loans</span></button>
+        <button onclick="switchTab(3)" class="nav-btn text-gray-400 flex flex-col items-center"><i class="fas fa-calendar-alt text-base"></i><span class="text-[10px]">Forecast</span></button>
+        <button onclick="switchTab(4)" class="nav-btn text-gray-400 flex flex-col items-center"><i class="fas fa-chart-pie text-base"></i><span class="text-[10px]">Summary</span></button>
+        <button onclick="switchTab(5)" class="nav-btn text-gray-400 flex flex-col items-center"><i class="fas fa-cog text-base"></i><span class="text-[10px]">Settings</span></button>
+        <button onclick="switchTab(6)" class="nav-btn text-gray-400 flex flex-col items-center"><i class="fas fa-user text-base"></i><span class="text-[10px]">About</span></button>
+    </nav>
+
+    <!-- MODALS -->
+    <div id="transactionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-6 rounded-xl w-full max-w-sm space-y-3">
+            <h3 class="text-lg font-bold">Add Budget Entry</h3>
+            <input type="text" id="tTitle" placeholder="Title" class="w-full border p-2 rounded">
+            <input type="number" id="tAmount" placeholder="Amount (PHP)" class="w-full border p-2 rounded">
+            <select id="tType" class="w-full border p-2 rounded"><option value="EXPENSE">Expense</option><option value="INCOME">Income</option><option value="SAVINGS">Savings Deposit</option></select>
+            <select id="tCategory" class="w-full border p-2 rounded"><option value="General">General</option></select>
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeModal('transactionModal')" class="px-4 py-2 text-gray-600">Cancel</button>
+                <button onclick="addTransaction()" class="bg-indigo-600 text-white px-4 py-2 rounded">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="savingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-6 rounded-xl w-full max-w-sm space-y-3">
+            <h3 class="text-lg font-bold">Add Bank Savings Account</h3>
+            <input type="text" id="sName" placeholder="Bank / Account Name" class="w-full border p-2 rounded">
+            <input type="number" id="sInitial" placeholder="Initial Balance" class="w-full border p-2 rounded">
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeModal('savingsModal')" class="px-4 py-2 text-gray-600">Cancel</button>
+                <button onclick="addSavingsAccount()" class="bg-indigo-600 text-white px-4 py-2 rounded">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loanModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-6 rounded-xl w-full max-w-sm space-y-3">
+            <h3 class="text-lg font-bold">Add Loan</h3>
+            <input type="text" id="lName" placeholder="Loan Name" class="w-full border p-2 rounded">
+            <input type="number" id="lAmount" placeholder="Total Amount" class="w-full border p-2 rounded">
+            <select id="lType" class="w-full border p-2 rounded"><option value="PAYABLE">Payable (I owe)</option><option value="RECEIVABLE">Receivable (Owed to me)</option></select>
+            <input type="number" id="lMonths" placeholder="Number of Months (Terms Remaining)" class="w-full border p-2 rounded">
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeModal('loanModal')" class="px-4 py-2 text-gray-600">Cancel</button>
+                <button onclick="addLoan()" class="bg-indigo-600 text-white px-4 py-2 rounded">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="forecastModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-6 rounded-xl w-full max-w-sm space-y-3">
+            <h3 class="text-lg font-bold">Add Forecast Expense</h3>
+            <select id="fLoanSelect" onchange="populateForecastFromLoan()" class="w-full border p-2 rounded">
+                <option value="">-- Select from Existing Loans (Optional) --</option>
+            </select>
+            <input type="text" id="fTitle" placeholder="Forecast Title / Loan Name" class="w-full border p-2 rounded">
+            <input type="number" id="fAmount" placeholder="Amount (PHP)" class="w-full border p-2 rounded">
+            <input type="date" id="fDate" class="w-full border p-2 rounded">
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeModal('forecastModal')" class="px-4 py-2 text-gray-600">Cancel</button>
+                <button onclick="addForecast()" class="bg-indigo-600 text-white px-4 py-2 rounded">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Application Logic -->
+    <script>
+        let data = JSON.parse(localStorage.getItem('budgetAppV3')) || {
+            transactions: [], savings: [], loans: [], forecasts: [], categories: ['General', 'Food', 'Utilities', 'Salary']
+        };
+
+        function saveData() {
+            localStorage.setItem('budgetAppV3', JSON.stringify(data));
+            renderAll();
+        }
+
+        function switchTab(index) {
+            const tabs = document.querySelectorAll('.tab-content');
+            const navs = document.querySelectorAll('.nav-btn');
+            tabs.forEach((tab, i) => {
+                if(i === index) tab.classList.remove('hidden');
+                else tab.classList.add('hidden');
+            });
+            navs.forEach((btn, i) => {
+                if(i === index) { btn.classList.remove('text-gray-400'); btn.classList.add('text-indigo-600'); }
+                else { btn.classList.remove('text-indigo-600'); btn.classList.add('text-gray-400'); }
+            });
+            updateCharts();
+        }
+
+        function openModal(id) { 
+            document.getElementById(id).classList.remove('hidden');
+            if(id === 'forecastModal') {
+                const select = document.getElementById('fLoanSelect');
+                select.innerHTML = '<option value="">-- Select from Existing Loans --</option>' + 
+                    data.loans.map(l => `<option value="${l.name}">${l.name} (Monthly: ₱${l.monthly})</option>`).join('');
+            }
+            if(id === 'transactionModal') {
+                const catSelect = document.getElementById('tCategory');
+                catSelect.innerHTML = data.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+        }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function populateForecastFromLoan() {
+            const loanName = document.getElementById('fLoanSelect').value;
+            const loan = data.loans.find(l => l.name === loanName);
+            if(loan) {
+                document.getElementById('fTitle').value = loan.name;
+                document.getElementById('fAmount').value = loan.monthly;
+            }
+        }
+
+        // Transactions
+        function addTransaction() {
+            const title = document.getElementById('tTitle').value;
+            const amount = parseFloat(document.getElementById('tAmount').value);
+            const type = document.getElementById('tType').value;
+            const category = document.getElementById('tCategory').value;
+            const date = new Date().toISOString().split('T')[0];
+
+            if(title && amount > 0) {
+                if(type === 'SAVINGS') {
+                    // Deduct from income / add to savings balance
+                    data.transactions.unshift({id: Date.now(), title: `Savings Deposit: ${title}`, amount, type: 'EXPENSE', category: 'Savings', date});
+                    if(data.savings.length > 0) data.savings[0].balance += amount;
+                } else {
+                    data.transactions.unshift({id: Date.now(), title, amount, type, category, date});
+                }
+                closeModal('transactionModal');
+                saveData();
+            }
+        }
+        function deleteTransaction(id) { data.transactions = data.transactions.filter(t => t.id !== id); saveData(); }
+
+        // Savings & Withdrawals
+        function addSavingsAccount() {
+            const name = document.getElementById('sName').value;
+            const balance = parseFloat(document.getElementById('sInitial').value) || 0;
+            if(name) {
+                data.savings.push({id: Date.now(), name, balance});
+                closeModal('savingsModal');
+                saveData();
+            }
+        }
+        function withdrawSavings(id) {
+            const amtStr = prompt("Enter withdrawal amount in PHP:");
+            const amt = parseFloat(amtStr);
+            const sav = data.savings.find(s => s.id === id);
+            if(sav && amt > 0 && amt <= sav.balance) {
+                sav.balance -= amt;
+                data.transactions.unshift({id: Date.now(), title: `Withdrawal: ${sav.name}`, amount: amt, type: 'INCOME', category: 'Savings Withdrawal', date: new Date().toISOString().split('T')[0]});
+                saveData();
+            } else if(amt > sav?.balance) {
+                alert("Insufficient savings balance.");
+            }
+        }
+        function deleteSavings(id) { data.savings = data.savings.filter(s => s.id !== id); saveData(); }
+
+        // Loans
+        function addLoan() {
+            const name = document.getElementById('lName').value;
+            const amount = parseFloat(document.getElementById('lAmount').value);
+            const type = document.getElementById('lType').value;
+            const months = parseInt(document.getElementById('lMonths').value) || 1;
+            const monthly = parseFloat((amount / months).toFixed(2));
+
+            if(name && amount > 0) {
+                data.loans.push({id: Date.now(), name, total: amount, remaining: amount, type, months, monthly});
+                closeModal('loanModal');
+                saveData();
+            }
+        }
+        function deleteLoan(id) { data.loans = data.loans.filter(l => l.id !== id); saveData(); }
+
+        // Forecast
+        function addForecast() {
+            const title = document.getElementById('fTitle').value;
+            const amount = parseFloat(document.getElementById('fAmount').value);
+            const date = document.getElementById('fDate').value || new Date().toISOString().split('T')[0];
+            if(title && amount > 0) {
+                data.forecasts.push({id: Date.now(), title, amount, date, checked: false});
+                closeModal('forecastModal');
+                saveData();
+            }
+        }
+        function toggleForecast(id) {
+            const f = data.forecasts.find(x => x.id === id);
+            if(f) {
+                f.checked = !f.checked;
+                if(f.checked) {
+                    data.transactions.unshift({id: Date.now(), title: `Forecast: ${f.title}`, amount: f.amount, type: 'EXPENSE', category: 'Forecasted', date: f.date});
+                    const loan = data.loans.find(l => l.name.toLowerCase() === f.title.toLowerCase());
+                    if(loan) {
+                        loan.remaining = Math.max(0, loan.remaining - f.amount);
+                    }
+                }
+                saveData();
+            }
+        }
+        function deleteForecast(id) { data.forecasts = data.forecasts.filter(f => f.id !== id); saveData(); }
+
+        // Settings Category
+        function addCategory() {
+            const cat = document.getElementById('newCategoryInput').value.trim();
+            if(cat && !data.categories.includes(cat)) {
+                data.categories.push(cat);
+                document.getElementById('newCategoryInput').value = '';
+                saveData();
+            }
+        }
+
+        // Charts Engine
+        let charts = {};
+        function updateCharts() {
+            const income = data.transactions.filter(t => t.type === 'INCOME').reduce((a, t) => a + t.amount, 0);
+            const expense = data.transactions.filter(t => t.type === 'EXPENSE').reduce((a, t) => a + t.amount, 0);
+            document.getElementById('sumIncome').innerText = `₱${income.toFixed(2)}`;
+            document.getElementById('sumExpense').innerText = `₱${expense.toFixed(2)}`;
+            document.getElementById('sumNet').innerText = `₱${(income - expense).toFixed(2)}`;
+
+            const createOrUpdate = (id, type, chartData, options) => {
+                const ctx = document.getElementById(id);
+                if(!ctx) return;
+                if(charts[id]) charts[id].destroy();
+                charts[id] = new Chart(ctx.getContext('2d'), { type, data: chartData, options: { responsive: true, ...options } });
+            };
+
+            const ieData = { labels: ['Income', 'Expenses'], datasets: [{ data: [income, expense], backgroundColor: ['#10B981', '#EF4444'] }] };
+            const loanData = { labels: data.loans.map(l => l.name), datasets: [{ label: 'Remaining', data: data.loans.map(l => l.remaining), backgroundColor: '#F97316' }] };
+            const savData = { labels: data.savings.map(s => s.name), datasets: [{ data: data.savings.map(s => s.balance), backgroundColor: '#3B82F6' }] };
+
+            // Render all chart canvas points
+            ['budgetIEChart', 'summaryIEChart'].forEach(id => createOrUpdate(id, 'bar', ieData, { plugins: { legend: { display: false }, title: { display: true, text: 'Income vs Expense' } } }));
+            ['budgetLoanChart', 'loansPageChart', 'summaryLoanChart'].forEach(id => createOrUpdate(id, 'bar', loanData, { plugins: { title: { display: true, text: 'Remaining Loans' } } }));
+            ['budgetSavingsChart', 'savingsPageChart', 'summarySavingsChart'].forEach(id => createOrUpdate(id, 'doughnut', savData, { plugins: { title: { display: true, text: 'Savings Breakdown' } } }));
+        }
+
+        function exportToCSV() {
+            let csv = 'Type,Title,Amount (PHP),Category,Date\n';
+            data.transactions.forEach(t => { csv += `${t.type},"${t.title}",${t.amount},"${t.category}",${t.date}\n`; });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'budget_export.csv'; a.click();
+        }
+
+        function renderAll() {
+            // Transactions
+            document.getElementById('transactionList').innerHTML = data.transactions.map(t => `
+                <div class="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
+                    <div><b>${t.title}</b><div class="text-xs text-gray-500">${t.category} • ${t.date}</div></div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold ${t.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}">${t.type === 'INCOME' ? '+' : '-'}₱${t.amount}</span>
+                        <button onclick="deleteTransaction(${t.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('') || '<p class="text-xs text-gray-400 text-center">No transactions yet.</p>';
+
+            // Savings
+            document.getElementById('savingsList').innerHTML = data.savings.map(s => `
+                <div class="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
+                    <div><b>${s.name}</b><div class="text-xs text-gray-500">Balance: ₱${s.balance}</div></div>
+                    <div class="flex space-x-2">
+                        <button onclick="withdrawSavings(${s.id})" class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs">Withdraw</button>
+                        <button onclick="deleteSavings(${s.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('') || '<p class="text-xs text-gray-400 text-center">No savings accounts added.</p>';
+
+            // Loans
+            document.getElementById('loanList').innerHTML = data.loans.map(l => `
+                <div class="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
+                    <div><b>${l.type}: ${l.name}</b><div class="text-xs text-gray-500">Remaining: ₱${l.remaining} / Total: ₱${l.total} | Monthly: ₱${l.monthly}</div></div>
+                    <button onclick="deleteLoan(${l.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
+                </div>
+            `).join('') || '<p class="text-xs text-gray-400 text-center">No loans recorded.</p>';
+
+            // Forecast Drilldown Filter
+            const fMonth = document.getElementById('filterMonth').value;
+            const fYear = document.getElementById('filterYear').value;
+            let filteredForecasts = data.forecasts;
+            if(fMonth !== 'ALL') {
+                filteredForecasts = filteredForecasts.filter(f => f.date.startsWith(`${fYear}-${fMonth}`));
+            } else {
+                filteredForecasts = filteredForecasts.filter(f => f.date.startsWith(`${fYear}`));
+            }
+
+            document.getElementById('forecastList').innerHTML = filteredForecasts.map(f => `
+                <div class="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
+                    <label class="flex items-center space-x-2 cursor-pointer flex-1">
+                        <input type="checkbox" ${f.checked ? 'checked' : ''} onchange="toggleForecast(${f.id})" class="accent-indigo-600">
+                        <span class="${f.checked ? 'line-through text-gray-400' : 'font-bold'}">${f.title} (₱${f.amount}) - ${f.date}</span>
+                    </label>
+                    <button onclick="deleteForecast(${f.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
+                </div>
+            `).join('') || '<p class="text-xs text-gray-400 text-center">No forecasts for selected period.</p>';
+
+            // Categories
+            document.getElementById('categoryList').innerHTML = data.categories.map(c => `<span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs">${c}</span>`).join('');
+
+            updateCharts();
+        }
+
+        renderAll();
+    </script>
+</body>
+</html>
