@@ -89,7 +89,9 @@
                     <option value="10">October</option><option value="11">November</option><option value="12">December</option>
                 </select>
                 <select id="filterYear" onchange="renderAll()" class="w-1/2 border p-2 rounded text-sm">
-                    <option value="2026">2026</option><option value="2027">2027</option>
+                    <option value="2026">2026</option><option value="2027">2027</option><option value="2028">2028</option>
+                    <option value="2029">2029</option><option value="2030">2030</option><option value="2031">2031</option>
+                    <option value="2032">2032</option><option value="2033">2033</option><option value="2034">2034</option><option value="2035">2035</option>
                 </select>
             </div>
             <div class="bg-white p-4 rounded-xl shadow">
@@ -219,12 +221,16 @@
 
     <!-- Script Application Logic -->
     <script>
-        let data = JSON.parse(localStorage.getItem('budgetAppV5')) || {
+        let data = JSON.parse(localStorage.getItem('budgetAppV6')) || {
             transactions: [], savings: [], loans: [], forecasts: [], categories: ['General', 'Food', 'Utilities', 'Salary', 'Loan']
         };
 
+        function formatPHP(num) {
+            return '₱' + Number(num).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
         function saveData() {
-            localStorage.setItem('budgetAppV5', JSON.stringify(data));
+            localStorage.setItem('budgetAppV6', JSON.stringify(data));
             renderAll();
         }
 
@@ -247,7 +253,7 @@
             if(id === 'forecastModal') {
                 const select = document.getElementById('fLoanSelect');
                 select.innerHTML = '<option value="">-- Select Loan Name --</option>' + 
-                    data.loans.map(l => `<option value="${l.name}">${l.name} (Monthly: ₱${l.monthly})</option>`).join('');
+                    data.loans.map(l => `<option value="${l.name}">${l.name} (Monthly: ${formatPHP(l.monthly)})</option>`).join('');
                 handleForecastCategoryChange();
             }
             if(id === 'transactionModal') {
@@ -321,7 +327,7 @@
         }
         function deleteSavings(id) { data.savings = data.savings.filter(s => s.id !== id); saveData(); }
 
-        // Loans (Automatically generates all monthly forecasts)
+        // Loans (Generates multi-month forecasts)
         function addLoan() {
             const name = document.getElementById('lName').value;
             const amount = parseFloat(document.getElementById('lAmount').value);
@@ -332,7 +338,6 @@
             if(name && amount > 0) {
                 data.loans.push({id: Date.now(), name, total: amount, remaining: amount, type, months, monthly});
                 
-                // Automatically add monthly installment for all months to forecast tab
                 const today = new Date();
                 for(let i = 0; i < months; i++) {
                     let d = new Date(today.getFullYear(), today.getMonth() + i, 10);
@@ -393,14 +398,14 @@
             }
         }
 
-        // Charts Engine
+        // Charts Engine (Using Bar Charts for Savings as requested)
         let charts = {};
         function updateCharts() {
             const income = data.transactions.filter(t => t.type === 'INCOME').reduce((a, t) => a + t.amount, 0);
             const expense = data.transactions.filter(t => t.type === 'EXPENSE').reduce((a, t) => a + t.amount, 0);
-            document.getElementById('sumIncome').innerText = `₱${income.toFixed(2)}`;
-            document.getElementById('sumExpense').innerText = `₱${expense.toFixed(2)}`;
-            document.getElementById('sumNet').innerText = `₱${(income - expense).toFixed(2)}`;
+            document.getElementById('sumIncome').innerText = formatPHP(income);
+            document.getElementById('sumExpense').innerText = formatPHP(expense);
+            document.getElementById('sumNet').innerText = formatPHP(income - expense);
 
             const createOrUpdate = (id, type, chartData, options) => {
                 const ctx = document.getElementById(id);
@@ -411,11 +416,11 @@
 
             const ieData = { labels: ['Income', 'Expenses'], datasets: [{ data: [income, expense], backgroundColor: ['#10B981', '#EF4444'] }] };
             const loanData = { labels: data.loans.map(l => l.name), datasets: [{ label: 'Remaining', data: data.loans.map(l => l.remaining), backgroundColor: '#F97316' }] };
-            const savData = { labels: data.savings.map(s => s.name), datasets: [{ data: data.savings.map(s => s.balance), backgroundColor: '#3B82F6' }] };
+            const savData = { labels: data.savings.map(s => s.name), datasets: [{ label: 'Balance', data: data.savings.map(s => s.balance), backgroundColor: '#3B82F6' }] };
 
             ['budgetIEChart', 'summaryIEChart'].forEach(id => createOrUpdate(id, 'bar', ieData, { plugins: { legend: { display: false }, title: { display: true, text: 'Income vs Expense' } } }));
             ['budgetLoanChart', 'loansPageChart', 'summaryLoanChart'].forEach(id => createOrUpdate(id, 'bar', loanData, { plugins: { title: { display: true, text: 'Remaining Loans' } } }));
-            ['budgetSavingsChart', 'savingsPageChart', 'summarySavingsChart'].forEach(id => createOrUpdate(id, 'doughnut', savData, { plugins: { title: { display: true, text: 'Savings Breakdown' } } }));
+            ['budgetSavingsChart', 'savingsPageChart', 'summarySavingsChart'].forEach(id => createOrUpdate(id, 'bar', savData, { plugins: { legend: { display: false }, title: { display: true, text: 'Savings Balances' } } }));
         }
 
         function exportToCSV() {
@@ -433,7 +438,7 @@
                 <div class="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
                     <div><b>${t.title}</b><div class="text-xs text-gray-500">${t.category} • ${t.date}</div></div>
                     <div class="flex items-center space-x-2">
-                        <span class="font-bold ${t.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}">${t.type === 'INCOME' ? '+' : '-'}₱${t.amount}</span>
+                        <span class="font-bold ${t.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}">${t.type === 'INCOME' ? '+' : '-'}${formatPHP(t.amount)}</span>
                         <button onclick="deleteTransaction(${t.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
@@ -442,7 +447,7 @@
             // Savings
             document.getElementById('savingsList').innerHTML = data.savings.map(s => `
                 <div class="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
-                    <div><b>${s.name}</b><div class="text-xs text-gray-500">Balance: ₱${s.balance}</div></div>
+                    <div><b>${s.name}</b><div class="text-xs text-gray-500">Balance: ${formatPHP(s.balance)}</div></div>
                     <div class="flex space-x-2">
                         <button onclick="withdrawSavings(${s.id})" class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs">Withdraw</button>
                         <button onclick="deleteSavings(${s.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
@@ -453,7 +458,7 @@
             // Loans
             document.getElementById('loanList').innerHTML = data.loans.map(l => `
                 <div class="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
-                    <div><b>${l.type}: ${l.name}</b><div class="text-xs text-gray-500">Remaining: ₱${l.remaining} / Total: ₱${l.total} | Monthly: ₱${l.monthly} (${l.months} mos)</div></div>
+                    <div><b>${l.type}: ${l.name}</b><div class="text-xs text-gray-500">Remaining: ${formatPHP(l.remaining)} / Total: ${formatPHP(l.total)} | Monthly: ${formatPHP(l.monthly)} (${l.months} mos)</div></div>
                     <button onclick="deleteLoan(${l.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
                 </div>
             `).join('') || '<p class="text-xs text-gray-400 text-center">No loans recorded.</p>';
@@ -472,7 +477,7 @@
                 <div class="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
                     <label class="flex items-center space-x-2 cursor-pointer flex-1">
                         <input type="checkbox" ${f.checked ? 'checked' : ''} onchange="toggleForecast(${f.id})" class="accent-indigo-600">
-                        <span class="${f.checked ? 'line-through text-gray-400' : 'font-bold'}">[${f.category || 'General'}] ${f.title} (₱${f.amount}) - ${f.date}</span>
+                        <span class="${f.checked ? 'line-through text-gray-400' : 'font-bold'}">[${f.category || 'General'}] ${f.title} (${formatPHP(f.amount)}) - ${f.date}</span>
                     </label>
                     <button onclick="deleteForecast(${f.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
                 </div>
