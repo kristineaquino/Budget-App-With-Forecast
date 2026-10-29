@@ -189,8 +189,24 @@
             <input type="number" id="lAmount" placeholder="Total Amount" class="w-full border p-2 rounded">
             <select id="lType" class="w-full border p-2 rounded"><option value="PAYABLE">Payable (I owe)</option><option value="RECEIVABLE">Receivable (Owed to me)</option></select>
             <input type="number" id="lMonths" placeholder="Number of Months (Terms Remaining)" class="w-full border p-2 rounded">
-            <input type="number" id="lMonthly" placeholder="Monthly Amount" class="w-full border p-2 rounded">
-            <div class="flex justify-end space-x-2">
+            <input type="number" id="lInstallment" placeholder="Installment Amount" class="w-full border p-2 rounded">
+            
+            <label class="block text-xs font-bold text-gray-600 mt-2">Frequency:</label>
+            <div class="flex space-x-4">
+                <label class="text-sm"><input type="radio" name="lFreq" value="MONTHLY" checked onchange="toggleFreqFields()"> Monthly</label>
+                <label class="text-sm"><input type="radio" name="lFreq" value="SEMIMONTHLY" onchange="toggleFreqFields()"> Semi-Monthly</label>
+            </div>
+
+            <div id="monthlyDateContainer">
+                <input type="number" id="lDueDate" placeholder="Due Date (Day of month: 1-31)" min="1" max="31" class="w-full border p-2 rounded mt-2">
+            </div>
+
+            <div id="semiMonthlyDateContainer" class="hidden space-y-2 mt-2">
+                <input type="number" id="lDue1" placeholder="First Due Date (e.g. 15)" min="1" max="31" class="w-full border p-2 rounded">
+                <input type="number" id="lDue2" placeholder="Second Due Date (e.g. 30)" min="1" max="31" class="w-full border p-2 rounded">
+            </div>
+
+            <div class="flex justify-end space-x-2 pt-2">
                 <button onclick="closeModal('loanModal')" class="px-4 py-2 text-gray-600">Cancel</button>
                 <button onclick="addLoan()" class="bg-indigo-600 text-white px-4 py-2 rounded">Save</button>
             </div>
@@ -221,7 +237,7 @@
 
     <!-- Script Application Logic -->
     <script>
-        let data = JSON.parse(localStorage.getItem('budgetAppV6')) || {
+        let data = JSON.parse(localStorage.getItem('budgetAppV7')) || {
             transactions: [], savings: [], loans: [], forecasts: [], categories: ['General', 'Food', 'Utilities', 'Salary', 'Loan']
         };
 
@@ -230,7 +246,7 @@
         }
 
         function saveData() {
-            localStorage.setItem('budgetAppV6', JSON.stringify(data));
+            localStorage.setItem('budgetAppV7', JSON.stringify(data));
             renderAll();
         }
 
@@ -253,7 +269,7 @@
             if(id === 'forecastModal') {
                 const select = document.getElementById('fLoanSelect');
                 select.innerHTML = '<option value="">-- Select Loan Name --</option>' + 
-                    data.loans.map(l => `<option value="${l.name}">${l.name} (Monthly: ${formatPHP(l.monthly)})</option>`).join('');
+                    data.loans.map(l => `<option value="${l.name}">${l.name} (${formatPHP(l.installment)})</option>`).join('');
                 handleForecastCategoryChange();
             }
             if(id === 'transactionModal') {
@@ -262,6 +278,17 @@
             }
         }
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function toggleFreqFields() {
+            const freq = document.querySelector('input[name="lFreq"]:checked').value;
+            if(freq === 'SEMIMONTHLY') {
+                document.getElementById('monthlyDateContainer').classList.add('hidden');
+                document.getElementById('semiMonthlyDateContainer').classList.remove('hidden');
+            } else {
+                document.getElementById('monthlyDateContainer').classList.remove('hidden');
+                document.getElementById('semiMonthlyDateContainer').classList.add('hidden');
+            }
+        }
 
         function handleForecastCategoryChange() {
             const cat = document.getElementById('fCategorySelect').value;
@@ -278,7 +305,7 @@
             const loan = data.loans.find(l => l.name === loanName);
             if(loan) {
                 document.getElementById('fTitle').value = loan.name;
-                document.getElementById('fAmount').value = loan.monthly;
+                document.getElementById('fAmount').value = loan.installment;
             }
         }
 
@@ -327,33 +354,61 @@
         }
         function deleteSavings(id) { data.savings = data.savings.filter(s => s.id !== id); saveData(); }
 
-        // Loans (Generates multi-month forecasts)
+        // Loans (Generates monthly or semi-monthly forecasts automatically)
         function addLoan() {
             const name = document.getElementById('lName').value;
             const amount = parseFloat(document.getElementById('lAmount').value);
             const type = document.getElementById('lType').value;
             const months = parseInt(document.getElementById('lMonths').value) || 1;
-            const monthly = parseFloat(document.getElementById('lMonthly').value) || parseFloat((amount / months).toFixed(2));
+            const installment = parseFloat(document.getElementById('lInstallment').value) || 0;
+            const freq = document.querySelector('input[name="lFreq"]:checked').value;
 
-            if(name && amount > 0) {
-                data.loans.push({id: Date.now(), name, total: amount, remaining: amount, type, months, monthly});
+            if(name && amount > 0 && installment > 0) {
+                data.loans.push({id: Date.now(), name, total: amount, remaining: amount, type, months, installment, freq});
                 
                 const today = new Date();
-                for(let i = 0; i < months; i++) {
-                    let d = new Date(today.getFullYear(), today.getMonth() + i, 10);
-                    let dateStr = d.toISOString().split('T')[0];
-                    data.forecasts.push({
-                        id: Date.now() + i,
-                        category: 'Loan',
-                        title: name,
-                        amount: monthly,
-                        date: dateStr,
-                        checked: false
-                    });
+                if(freq === 'MONTHLY') {
+                    const dueDay = parseInt(document.getElementById('lDueDate').value) || 10;
+                    for(let i = 0; i < months; i++) {
+                        let targetDate = new Date(today.getFullYear(), today.getMonth() + i, dueDay);
+                        data.forecasts.push({
+                            id: Date.now() + i,
+                            category: 'Loan',
+                            title: name,
+                            amount: installment,
+                            date: targetDate.toISOString().split('T')[0],
+                            checked: false
+                        });
+                    }
+                } else {
+                    const due1 = parseInt(document.getElementById('lDue1').value) || 15;
+                    const due2 = parseInt(document.getElementById('lDue2').value) || 30;
+                    for(let i = 0; i < months; i++) {
+                        let d1 = new Date(today.getFullYear(), today.getMonth() + i, due1);
+                        let d2 = new Date(today.getFullYear(), today.getMonth() + i, due2);
+                        data.forecasts.push({
+                            id: Date.now() + (i * 2),
+                            category: 'Loan',
+                            title: name,
+                            amount: installment,
+                            date: d1.toISOString().split('T')[0],
+                            checked: false
+                        });
+                        data.forecasts.push({
+                            id: Date.now() + (i * 2) + 1,
+                            category: 'Loan',
+                            title: name,
+                            amount: installment,
+                            date: d2.toISOString().split('T')[0],
+                            checked: false
+                        });
+                    }
                 }
 
                 closeModal('loanModal');
                 saveData();
+            } else {
+                alert("Please fill out all required loan fields correctly.");
             }
         }
         function deleteLoan(id) { data.loans = data.loans.filter(l => l.id !== id); saveData(); }
@@ -398,7 +453,7 @@
             }
         }
 
-        // Charts Engine (Using Bar Charts for Savings as requested)
+        // Charts Engine
         let charts = {};
         function updateCharts() {
             const income = data.transactions.filter(t => t.type === 'INCOME').reduce((a, t) => a + t.amount, 0);
@@ -458,20 +513,24 @@
             // Loans
             document.getElementById('loanList').innerHTML = data.loans.map(l => `
                 <div class="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
-                    <div><b>${l.type}: ${l.name}</b><div class="text-xs text-gray-500">Remaining: ${formatPHP(l.remaining)} / Total: ${formatPHP(l.total)} | Monthly: ${formatPHP(l.monthly)} (${l.months} mos)</div></div>
+                    <div><b>${l.type}: ${l.name}</b><div class="text-xs text-gray-500">Remaining: ${formatPHP(l.remaining)} / Total: ${formatPHP(l.total)} | Installment: ${formatPHP(l.installment)} (${l.freq})</div></div>
                     <button onclick="deleteLoan(${l.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
                 </div>
             `).join('') || '<p class="text-xs text-gray-400 text-center">No loans recorded.</p>';
 
-            // Forecast Drilldown Filter
+            // Forecast Drilldown Filter & Sorted by Date
             const fMonth = document.getElementById('filterMonth').value;
             const fYear = document.getElementById('filterYear').value;
-            let filteredForecasts = data.forecasts;
+            let filteredForecasts = [...data.forecasts];
+            
             if(fMonth !== 'ALL') {
                 filteredForecasts = filteredForecasts.filter(f => f.date && f.date.startsWith(`${fYear}-${fMonth}`));
             } else {
                 filteredForecasts = filteredForecasts.filter(f => f.date && f.date.startsWith(`${fYear}`));
             }
+
+            // Sort forecasts by date ascending
+            filteredForecasts.sort((a, b) => new Date(a.date) - new Date(b.date));
 
             document.getElementById('forecastList').innerHTML = filteredForecasts.map(f => `
                 <div class="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
