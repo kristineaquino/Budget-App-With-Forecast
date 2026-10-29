@@ -47,13 +47,13 @@
         <div id="tab-savings" class="tab-content hidden space-y-4">
             <div class="flex justify-between items-center">
                 <h2 class="text-xl font-bold text-gray-800">Savings Accounts</h2>
-                <button onclick="openModal('savingsModal')" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold shadow">Add Savings</button>
+                <button onclick="openModal('savingsModal')" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold shadow">Add Bank Savings</button>
             </div>
             <div class="bg-white p-4 rounded-xl shadow">
                 <canvas id="savingsPageChart"></canvas>
             </div>
             <div class="bg-white p-4 rounded-xl shadow">
-                <h3 class="font-bold text-gray-700 mb-2">My Bank Savings & Withdrawals</h3>
+                <h3 class="font-bold text-gray-700 mb-2">Bank Savings & Withdrawals</h3>
                 <div id="savingsList" class="space-y-3"></div>
             </div>
         </div>
@@ -212,12 +212,12 @@
 
     <!-- Script Application Logic -->
     <script>
-        let data = JSON.parse(localStorage.getItem('budgetAppV3')) || {
+        let data = JSON.parse(localStorage.getItem('budgetAppV4')) || {
             transactions: [], savings: [], loans: [], forecasts: [], categories: ['General', 'Food', 'Utilities', 'Salary']
         };
 
         function saveData() {
-            localStorage.setItem('budgetAppV3', JSON.stringify(data));
+            localStorage.setItem('budgetAppV4', JSON.stringify(data));
             renderAll();
         }
 
@@ -268,7 +268,7 @@
 
             if(title && amount > 0) {
                 if(type === 'SAVINGS') {
-                    // Deduct from income / add to savings balance
+                    // Deduct from income (logs as expense with category savings) & add to bank savings balance
                     data.transactions.unshift({id: Date.now(), title: `Savings Deposit: ${title}`, amount, type: 'EXPENSE', category: 'Savings', date});
                     if(data.savings.length > 0) data.savings[0].balance += amount;
                 } else {
@@ -296,6 +296,7 @@
             const sav = data.savings.find(s => s.id === id);
             if(sav && amt > 0 && amt <= sav.balance) {
                 sav.balance -= amt;
+                // Withdrawal added to income
                 data.transactions.unshift({id: Date.now(), title: `Withdrawal: ${sav.name}`, amount: amt, type: 'INCOME', category: 'Savings Withdrawal', date: new Date().toISOString().split('T')[0]});
                 saveData();
             } else if(amt > sav?.balance) {
@@ -304,16 +305,27 @@
         }
         function deleteSavings(id) { data.savings = data.savings.filter(s => s.id !== id); saveData(); }
 
-        // Loans
+        // Loans (Automatically adds monthly amount to forecast tab)
         function addLoan() {
             const name = document.getElementById('lName').value;
             const amount = parseFloat(document.getElementById('lAmount').value);
             const type = document.getElementById('lType').value;
             const months = parseInt(document.getElementById('lMonths').value) || 1;
             const monthly = parseFloat((amount / months).toFixed(2));
+            const currentDate = new Date().toISOString().split('T')[0];
 
             if(name && amount > 0) {
                 data.loans.push({id: Date.now(), name, total: amount, remaining: amount, type, months, monthly});
+                
+                // Automatically add monthly installment to forecast tab
+                data.forecasts.push({
+                    id: Date.now() + 1,
+                    title: name,
+                    amount: monthly,
+                    date: currentDate,
+                    checked: false
+                });
+
                 closeModal('loanModal');
                 saveData();
             }
@@ -377,7 +389,6 @@
             const loanData = { labels: data.loans.map(l => l.name), datasets: [{ label: 'Remaining', data: data.loans.map(l => l.remaining), backgroundColor: '#F97316' }] };
             const savData = { labels: data.savings.map(s => s.name), datasets: [{ data: data.savings.map(s => s.balance), backgroundColor: '#3B82F6' }] };
 
-            // Render all chart canvas points
             ['budgetIEChart', 'summaryIEChart'].forEach(id => createOrUpdate(id, 'bar', ieData, { plugins: { legend: { display: false }, title: { display: true, text: 'Income vs Expense' } } }));
             ['budgetLoanChart', 'loansPageChart', 'summaryLoanChart'].forEach(id => createOrUpdate(id, 'bar', loanData, { plugins: { title: { display: true, text: 'Remaining Loans' } } }));
             ['budgetSavingsChart', 'savingsPageChart', 'summarySavingsChart'].forEach(id => createOrUpdate(id, 'doughnut', savData, { plugins: { title: { display: true, text: 'Savings Breakdown' } } }));
@@ -428,9 +439,9 @@
             const fYear = document.getElementById('filterYear').value;
             let filteredForecasts = data.forecasts;
             if(fMonth !== 'ALL') {
-                filteredForecasts = filteredForecasts.filter(f => f.date.startsWith(`${fYear}-${fMonth}`));
+                filteredForecasts = filteredForecasts.filter(f => f.date && f.date.startsWith(`${fYear}-${fMonth}`));
             } else {
-                filteredForecasts = filteredForecasts.filter(f => f.date.startsWith(`${fYear}`));
+                filteredForecasts = filteredForecasts.filter(f => f.date && f.date.startsWith(`${fYear}`));
             }
 
             document.getElementById('forecastList').innerHTML = filteredForecasts.map(f => `
