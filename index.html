@@ -187,6 +187,7 @@
             <input type="number" id="lAmount" placeholder="Total Amount" class="w-full border p-2 rounded">
             <select id="lType" class="w-full border p-2 rounded"><option value="PAYABLE">Payable (I owe)</option><option value="RECEIVABLE">Receivable (Owed to me)</option></select>
             <input type="number" id="lMonths" placeholder="Number of Months (Terms Remaining)" class="w-full border p-2 rounded">
+            <input type="number" id="lMonthly" placeholder="Monthly Amount" class="w-full border p-2 rounded">
             <div class="flex justify-end space-x-2">
                 <button onclick="closeModal('loanModal')" class="px-4 py-2 text-gray-600">Cancel</button>
                 <button onclick="addLoan()" class="bg-indigo-600 text-white px-4 py-2 rounded">Save</button>
@@ -197,10 +198,16 @@
     <div id="forecastModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
         <div class="bg-white p-6 rounded-xl w-full max-w-sm space-y-3">
             <h3 class="text-lg font-bold">Add Forecast Expense</h3>
-            <select id="fLoanSelect" onchange="populateForecastFromLoan()" class="w-full border p-2 rounded">
-                <option value="">-- Select from Existing Loans (Optional) --</option>
+            <select id="fCategorySelect" onchange="handleForecastCategoryChange()" class="w-full border p-2 rounded">
+                <option value="General">General Expense</option>
+                <option value="Loan">Loan</option>
             </select>
-            <input type="text" id="fTitle" placeholder="Forecast Title / Loan Name" class="w-full border p-2 rounded">
+            <div id="loanNameContainer" class="hidden">
+                <select id="fLoanSelect" onchange="populateForecastFromLoan()" class="w-full border p-2 rounded">
+                    <option value="">-- Select Loan Name --</option>
+                </select>
+            </div>
+            <input type="text" id="fTitle" placeholder="Forecast Title / Name" class="w-full border p-2 rounded">
             <input type="number" id="fAmount" placeholder="Amount (PHP)" class="w-full border p-2 rounded">
             <input type="date" id="fDate" class="w-full border p-2 rounded">
             <div class="flex justify-end space-x-2">
@@ -212,12 +219,12 @@
 
     <!-- Script Application Logic -->
     <script>
-        let data = JSON.parse(localStorage.getItem('budgetAppV4')) || {
-            transactions: [], savings: [], loans: [], forecasts: [], categories: ['General', 'Food', 'Utilities', 'Salary']
+        let data = JSON.parse(localStorage.getItem('budgetAppV5')) || {
+            transactions: [], savings: [], loans: [], forecasts: [], categories: ['General', 'Food', 'Utilities', 'Salary', 'Loan']
         };
 
         function saveData() {
-            localStorage.setItem('budgetAppV4', JSON.stringify(data));
+            localStorage.setItem('budgetAppV5', JSON.stringify(data));
             renderAll();
         }
 
@@ -239,8 +246,9 @@
             document.getElementById(id).classList.remove('hidden');
             if(id === 'forecastModal') {
                 const select = document.getElementById('fLoanSelect');
-                select.innerHTML = '<option value="">-- Select from Existing Loans --</option>' + 
+                select.innerHTML = '<option value="">-- Select Loan Name --</option>' + 
                     data.loans.map(l => `<option value="${l.name}">${l.name} (Monthly: ₱${l.monthly})</option>`).join('');
+                handleForecastCategoryChange();
             }
             if(id === 'transactionModal') {
                 const catSelect = document.getElementById('tCategory');
@@ -248,6 +256,16 @@
             }
         }
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function handleForecastCategoryChange() {
+            const cat = document.getElementById('fCategorySelect').value;
+            const container = document.getElementById('loanNameContainer');
+            if(cat === 'Loan') {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
 
         function populateForecastFromLoan() {
             const loanName = document.getElementById('fLoanSelect').value;
@@ -268,7 +286,6 @@
 
             if(title && amount > 0) {
                 if(type === 'SAVINGS') {
-                    // Deduct from income (logs as expense with category savings) & add to bank savings balance
                     data.transactions.unshift({id: Date.now(), title: `Savings Deposit: ${title}`, amount, type: 'EXPENSE', category: 'Savings', date});
                     if(data.savings.length > 0) data.savings[0].balance += amount;
                 } else {
@@ -296,7 +313,6 @@
             const sav = data.savings.find(s => s.id === id);
             if(sav && amt > 0 && amt <= sav.balance) {
                 sav.balance -= amt;
-                // Withdrawal added to income
                 data.transactions.unshift({id: Date.now(), title: `Withdrawal: ${sav.name}`, amount: amt, type: 'INCOME', category: 'Savings Withdrawal', date: new Date().toISOString().split('T')[0]});
                 saveData();
             } else if(amt > sav?.balance) {
@@ -305,26 +321,31 @@
         }
         function deleteSavings(id) { data.savings = data.savings.filter(s => s.id !== id); saveData(); }
 
-        // Loans (Automatically adds monthly amount to forecast tab)
+        // Loans (Automatically generates all monthly forecasts)
         function addLoan() {
             const name = document.getElementById('lName').value;
             const amount = parseFloat(document.getElementById('lAmount').value);
             const type = document.getElementById('lType').value;
             const months = parseInt(document.getElementById('lMonths').value) || 1;
-            const monthly = parseFloat((amount / months).toFixed(2));
-            const currentDate = new Date().toISOString().split('T')[0];
+            const monthly = parseFloat(document.getElementById('lMonthly').value) || parseFloat((amount / months).toFixed(2));
 
             if(name && amount > 0) {
                 data.loans.push({id: Date.now(), name, total: amount, remaining: amount, type, months, monthly});
                 
-                // Automatically add monthly installment to forecast tab
-                data.forecasts.push({
-                    id: Date.now() + 1,
-                    title: name,
-                    amount: monthly,
-                    date: currentDate,
-                    checked: false
-                });
+                // Automatically add monthly installment for all months to forecast tab
+                const today = new Date();
+                for(let i = 0; i < months; i++) {
+                    let d = new Date(today.getFullYear(), today.getMonth() + i, 10);
+                    let dateStr = d.toISOString().split('T')[0];
+                    data.forecasts.push({
+                        id: Date.now() + i,
+                        category: 'Loan',
+                        title: name,
+                        amount: monthly,
+                        date: dateStr,
+                        checked: false
+                    });
+                }
 
                 closeModal('loanModal');
                 saveData();
@@ -334,11 +355,12 @@
 
         // Forecast
         function addForecast() {
+            const category = document.getElementById('fCategorySelect').value;
             const title = document.getElementById('fTitle').value;
             const amount = parseFloat(document.getElementById('fAmount').value);
             const date = document.getElementById('fDate').value || new Date().toISOString().split('T')[0];
             if(title && amount > 0) {
-                data.forecasts.push({id: Date.now(), title, amount, date, checked: false});
+                data.forecasts.push({id: Date.now(), category, title, amount, date, checked: false});
                 closeModal('forecastModal');
                 saveData();
             }
@@ -348,10 +370,12 @@
             if(f) {
                 f.checked = !f.checked;
                 if(f.checked) {
-                    data.transactions.unshift({id: Date.now(), title: `Forecast: ${f.title}`, amount: f.amount, type: 'EXPENSE', category: 'Forecasted', date: f.date});
-                    const loan = data.loans.find(l => l.name.toLowerCase() === f.title.toLowerCase());
-                    if(loan) {
-                        loan.remaining = Math.max(0, loan.remaining - f.amount);
+                    data.transactions.unshift({id: Date.now(), title: `Forecast: ${f.title}`, amount: f.amount, type: 'EXPENSE', category: f.category || 'Forecasted', date: f.date});
+                    if(f.category === 'Loan') {
+                        const loan = data.loans.find(l => l.name.toLowerCase() === f.title.toLowerCase());
+                        if(loan) {
+                            loan.remaining = Math.max(0, loan.remaining - f.amount);
+                        }
                     }
                 }
                 saveData();
@@ -429,7 +453,7 @@
             // Loans
             document.getElementById('loanList').innerHTML = data.loans.map(l => `
                 <div class="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
-                    <div><b>${l.type}: ${l.name}</b><div class="text-xs text-gray-500">Remaining: ₱${l.remaining} / Total: ₱${l.total} | Monthly: ₱${l.monthly}</div></div>
+                    <div><b>${l.type}: ${l.name}</b><div class="text-xs text-gray-500">Remaining: ₱${l.remaining} / Total: ₱${l.total} | Monthly: ₱${l.monthly} (${l.months} mos)</div></div>
                     <button onclick="deleteLoan(${l.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
                 </div>
             `).join('') || '<p class="text-xs text-gray-400 text-center">No loans recorded.</p>';
@@ -448,7 +472,7 @@
                 <div class="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
                     <label class="flex items-center space-x-2 cursor-pointer flex-1">
                         <input type="checkbox" ${f.checked ? 'checked' : ''} onchange="toggleForecast(${f.id})" class="accent-indigo-600">
-                        <span class="${f.checked ? 'line-through text-gray-400' : 'font-bold'}">${f.title} (₱${f.amount}) - ${f.date}</span>
+                        <span class="${f.checked ? 'line-through text-gray-400' : 'font-bold'}">[${f.category || 'General'}] ${f.title} (₱${f.amount}) - ${f.date}</span>
                     </label>
                     <button onclick="deleteForecast(${f.id})" class="text-red-500"><i class="fas fa-trash"></i></button>
                 </div>
